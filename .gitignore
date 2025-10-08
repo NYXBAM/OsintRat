@@ -1,0 +1,14 @@
+/.DS_Store
+/.env
+/__pycache__
+/bot.log
+/bot_database.db
+/config.py
+/database
+/develop
+/handlers
+/main.py
+/requirements.txt
+/total.txt
+/utils
+/venv
