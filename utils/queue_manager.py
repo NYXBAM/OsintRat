@@ -95,6 +95,7 @@ class QueueManager:
                     
                 except Exception as e:
                     logger.error(f"Error processing queued query {query.id}: {e}")
+                    db.mark_query_processed(query.id)
                     # Continue with next query even if one fails
                     continue
             
