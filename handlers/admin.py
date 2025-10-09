@@ -289,7 +289,7 @@ async def cmd_queue(message: types.Message):
     for query in pending[:10]:  # Show first 10
         queue_text += (
             f"ID: {query.id}\n"
-            f"User: `{query.user_telegram_id}`\n"
+            f"User: {query.user_telegram_id}\n"
             f"Query: {query.query[:50]}...\n"
             f"Created: {query.created_at.strftime('%Y-%m-%d %H:%M')}\n"
             f"{'-' * 30}\n"
