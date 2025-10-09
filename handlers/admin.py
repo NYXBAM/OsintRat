@@ -298,7 +298,7 @@ async def cmd_queue(message: types.Message):
     if len(pending) > 10:
         queue_text += f"\n... and {len(pending) - 10} more queries"
     
-    await message.answer(queue_text, parse_mode='Markdown')
+    await message.answer(queue_text)
 
 
 async def cmd_process_queue(message: types.Message):
