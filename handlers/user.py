@@ -42,8 +42,7 @@ async def cmd_start(message: types.Message):
             f"Check out our {channel_link}!"
         )
     await message.answer(welcome_text, parse_mode="HTML", disable_web_page_preview=True)
-
-
+    
 async def cmd_help(message: types.Message):
     """Handle /help command."""
     help_text = (
@@ -64,7 +63,6 @@ async def cmd_help(message: types.Message):
     
     await message.answer(help_text, parse_mode='Markdown')
 
-
 async def cmd_balance(message: types.Message):
     """get balance"""
     user = db.get_user(message.from_user.id)
@@ -80,7 +78,6 @@ async def cmd_balance(message: types.Message):
     )
     
     await message.answer(balance_text, parse_mode='Markdown')
-
 
 async def handle_search_query(message: types.Message):
     user = db.get_or_create_user(

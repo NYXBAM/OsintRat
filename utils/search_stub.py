@@ -3,6 +3,7 @@ import asyncio
 from meilisearch import Client
 import io
 import random
+import re
 import aiohttp
 from functools import lru_cache
 
@@ -98,19 +99,26 @@ def detect_search_type(query: str) -> str:
     Detects search type.
     """
     query = query.strip().lower()
-
+    if query.startswith('@'):
+        return 'username'
+    
     if '@' in query and '.' in query.split('@')[-1]:
         return 'email'
     if query.startswith('id') and query[2:].isdigit():
         return 'account_id'
     if query.isdigit() and len(query) <= 10:
         return 'account_id'
-    digits_only = ''.join(c for c in query if c.isdigit())
-    if len(digits_only) >= 7:
+    phone_digits = normalize_phone_digits(query)
+    if len(phone_digits) >= 7:
         return 'phone'
-    if query.startswith('@') or ('_' in query and not query.isdigit()):
+    if '_' in query and not query.isdigit():
         return 'username'
+    
     return 'name'
+
+def normalize_phone_digits(phone: str) -> str:
+    return ''.join(c for c in phone if c.isdigit())
+
 
 @lru_cache(maxsize=32)
 async def get_filterable_attributes(index_name: str, session: aiohttp.ClientSession, url: str) -> set:
