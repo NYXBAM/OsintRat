@@ -135,6 +135,8 @@ async def search_database(query: str, search_type: str = None) -> dict:
     if not search_type:
         search_type = detect_search_type(query)
 
+    if search_type == 'phone':
+        query = normalize_phone_digits(query)
     try:
         client = Client(config.CLIENT_URL)
         query_clean = query.strip()
