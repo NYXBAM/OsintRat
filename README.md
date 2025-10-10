@@ -50,12 +50,12 @@ Clone the repository and install dependencies:
 git clone 
 cd OsintRat
 pip install -r requirements.txt
-
+```
 🔑 Environment Variables
 
 Create a .env file in the project root based on the example below:
 
-```.env
+```
 BOT_TOKEN=8123
 ADMIN_IDS=1,2,3
 CLIENT_URL= # URL of your Meilisearch instance
