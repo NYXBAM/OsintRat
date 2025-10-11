@@ -47,7 +47,7 @@ User → Telegram Bot → Meilisearch API → JSON dataset (~100M records)
 Clone the repository and install dependencies:
 
 ```bash
-git clone 
+git clone https://github.com/NYXBAM/OsintRat
 cd OsintRat
 pip install -r requirements.txt
 ```
