@@ -2,6 +2,8 @@
 Database connection and session management.
 """
 
+import asyncio
+from aiogram import Bot
 import logging
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker, Session
@@ -15,15 +17,6 @@ engine = create_engine(config.DATABASE_URL, echo=False)
 
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 logger = logging.getLogger(__name__)
-
-
-# def init_db():
-    # """
-    # Initialize the database by creating all tables.
-    # Should be called once when the bot starts.
-    # """
-    # Base.metadata.create_all(bind=engine)
-    # logger.inf("✅ Database initialized successfully")
 
 
 def init_db():
@@ -224,5 +217,28 @@ def log_admin_action(admin_telegram_id: int, action: str,
         )
         session.add(log_entry)
         session.commit()
+    finally:
+        session.close()
+        
+    
+async def send_all(bot: Bot, text: str):
+    """Sending message to all users in the database (bot)"""
+    session = get_session()
+    try:
+        users = session.query(User).filter_by(is_blocked=False).all()
+        sent_count = 0
+        failed_count = 0
+
+        for user in users:
+            try:
+                await bot.send_message(chat_id=user.telegram_id, text=text, parse_mode='HTML')
+                sent_count += 1
+            except Exception as e:
+                failed_count += 1
+                #  delay 
+            await asyncio.sleep(0.15)
+
+        return {"sent": sent_count, "failed": failed_count}
+
     finally:
         session.close()

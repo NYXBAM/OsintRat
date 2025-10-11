@@ -11,6 +11,7 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher, executor
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from bot_instance import dp
 
 import config
 from database import db
@@ -75,11 +76,7 @@ def main():
     
     if not config.ADMIN_IDS:
         logger.warning("⚠️ No admin IDs configured! Set ADMIN_IDS in config.py")
-    
-    # Create bot and dispatcher
-    bot = Bot(token=config.BOT_TOKEN)
-    storage = MemoryStorage()
-    dp = Dispatcher(bot, storage=storage)
+
     
     # Register handlers
     admin.register_admin_handlers(dp)

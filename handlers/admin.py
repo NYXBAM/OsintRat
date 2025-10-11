@@ -4,6 +4,7 @@ from database import db
 from utils.search_stub import is_database_online
 from utils.queue_manager import QueueManager
 import config
+from bot_instance import bot
 
 
 def is_admin(user_id: int) -> bool:
@@ -275,7 +276,6 @@ async def cmd_unblock(message: types.Message):
 async def cmd_queue(message: types.Message):
     """Handle /queue command - view pending queue."""
     if not is_admin(message.from_user.id):
-        await message.answer("❌ You don't have admin permissions.")
         return
     
     pending = db.get_pending_queries()
@@ -300,38 +300,9 @@ async def cmd_queue(message: types.Message):
     
     await message.answer(queue_text)
 
-
-async def cmd_process_queue(message: types.Message):
-    """Handle /process_queue command - manually process queue."""
-    if not is_admin(message.from_user.id):
-        await message.answer("❌ You don't have admin permissions.")
-        return
-    
-    if not await is_database_online():
-        await message.answer(
-            "⚠️ Database is currently offline.\n"
-            "Set it online first using /db_online"
-        )
-        return
-    
-    await message.answer("🔄 Processing queue... This may take a moment.")
-    
-    # Get queue manager from bot data
-    queue_manager = message.bot.get('queue_manager')
-    if queue_manager:
-        await queue_manager.process_queue()
-        await message.answer("✅ Queue processing complete!")
-    else:
-        await message.answer("❌ Queue manager not found.")
-    
-    # Log admin action
-    db.log_admin_action(message.from_user.id, "process_queue")
-
-
 async def cmd_db_status(message: types.Message):
     """Handle /db_status command - check database status."""
     if not is_admin(message.from_user.id):
-        await message.answer("❌ You don't have admin permissions.")
         return
     
     status = "🟢 ONLINE" if await is_database_online() else "🔴 OFFLINE"
@@ -346,13 +317,9 @@ async def cmd_db_status(message: types.Message):
     await message.answer(status_text, parse_mode='Markdown')
 
 
-
-
-
 async def cmd_stats(message: types.Message):
     """Handle /stats command - view system statistics."""
     if not is_admin(message.from_user.id):
-        await message.answer("❌ You don't have admin permissions.")
         return
     
     users = db.get_all_users()
@@ -378,6 +345,24 @@ async def cmd_stats(message: types.Message):
     # Log admin action
     db.log_admin_action(message.from_user.id, "view_stats")
 
+async def cmd_send_all(message: types.Message):
+    """Handle /broadcast command - send message to all users."""
+    if not is_admin(message.from_user.id):
+        return
+
+    text = message.get_args()
+    if not text:
+        return await message.reply("/broadcast <text>")
+
+    await message.reply("🚀 Starting broadcasting...")
+    stats = await db.send_all(bot, text)
+    await message.reply(
+        f"✅ Finished sending!\n"
+        f"📬 Succesfully: {stats['sent']}\n"
+        f"❌ Failed: {stats['failed']}"
+    )
+
+
 
 def register_admin_handlers(dp: Dispatcher):
     """
@@ -390,6 +375,6 @@ def register_admin_handlers(dp: Dispatcher):
     dp.register_message_handler(cmd_block, commands=['block'])
     dp.register_message_handler(cmd_unblock, commands=['unblock'])
     dp.register_message_handler(cmd_queue, commands=['queue'])
-    dp.register_message_handler(cmd_process_queue, commands=['process_queue'])
     dp.register_message_handler(cmd_db_status, commands=['db_status'])
     dp.register_message_handler(cmd_stats, commands=['stats'])
+    dp.register_message_handler(cmd_send_all, commands=['send_all'])
