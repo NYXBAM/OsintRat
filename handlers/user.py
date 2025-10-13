@@ -94,7 +94,8 @@ async def handle_search_query(message: types.Message):
     if user.free_searches_remaining <= 0:
         await message.answer(
             "⚠️ You've reached your free search limit.\n\n"
-            "Please contact the administrator to get more searches."
+            "Please contact the administrator to get more searches.\n\n"
+            "Contact: {config.ADMIN_USERNAME}"
         )
         return
     
@@ -155,7 +156,7 @@ async def handle_search_query(message: types.Message):
             # Send results file
             await message.answer_document(
                 results_file,
-                caption="Here are your search results."
+                caption="Here are your search results.\n\n@OsintRatBot"
             )
         else:
             await search_msg.edit_text(

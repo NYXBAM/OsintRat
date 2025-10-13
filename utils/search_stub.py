@@ -276,33 +276,38 @@ async def search_database(query: str, search_type: str = None) -> dict:
         }
 
 
+import io
+
 def generate_results_file(results: dict) -> io.BytesIO:
     """
-    Generate result report 
+    Generate result report.txt
     """
     lines = []
-    lines.append("🔍 USER SEARCH RESULTS")
-    lines.append("=" * 40)
-    lines.append(f"\nQuery: {results.get('query', 'N/A')}")
-    lines.append(f"Search Type: {results.get('search_type', 'N/A').capitalize()}")
-    lines.append(f"Results Found: {results.get('count', 0)}")
-    lines.append("\n" + "=" * 60 + "\n")
+    lines.append("🔍 USER SEARCH RESULTS @OsintRatBot")
+    lines.append("=" * 50)
+    lines.append(f"\n🔎 Query: {results.get('query', 'N/A')}")
+    lines.append(f"📄 Search Type: {results.get('search_type', 'N/A').capitalize()}")
+    lines.append(f"📊 Results Found: {results.get('count', 0)}")
+    lines.append("\n" + "=" * 50 + "\n")
 
     if results.get('results_found'):
         for i, item in enumerate(results['data'], 1):
-            lines.append(f"Result #{i}")
-            lines.append("-" * 30)
+            lines.append(f"🧾 Result #{i}")
+            lines.append("-" * 50)
             for key, value in item.items():
                 if value and value not in ["N/A", "{}", None, ""]:
-                    lines.append(f"{key}: {value}")
+                    pretty_key = key.replace("_", " ").title()
+                    lines.append(f"• {pretty_key}: {value}")
+
             lines.append("\n")
     else:
-        lines.append("No results found for your query.\n")
+        lines.append("❌ No results found for your query.\n")
 
-    lines.append("=" * 30)
-    lines.append("Search completed successfully.\n")
+    lines.append("=" * 50)
+    lines.append("✅ Search completed successfully.\n\n\nt.me/OsintRatBot")
 
-    file = io.BytesIO("\n".join(lines).encode("utf-8"))
+    file_content = "\n".join(lines)
+    file = io.BytesIO(file_content.encode("utf-8"))
     file.name = f"search_results_{results.get('search_type', 'unknown')}.txt"
     file.seek(0)
     return file
