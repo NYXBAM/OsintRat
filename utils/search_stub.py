@@ -129,9 +129,6 @@ async def get_filterable_attributes(index_name: str, session: aiohttp.ClientSess
         return set()
 
 async def search_database(query: str, search_type: str = None) -> dict:
-    """
-    Search: fuzzy for names, strict for username, account_id, email, phone
-    """
     if not search_type:
         search_type = detect_search_type(query)
 
@@ -142,8 +139,6 @@ async def search_database(query: str, search_type: str = None) -> dict:
         query_clean = query.strip()
         query_lower = query_clean.lower()
         all_results = []
-        query_words = query_lower.split() 
-
         def process_index(index_name):
             local_hits = []
             try:
@@ -155,42 +150,29 @@ async def search_database(query: str, search_type: str = None) -> dict:
                         'limit': 200
                     })
                     hits = search_result.get('hits', [])
-
-    
                 else:
                     field_name = search_type
-
+                    clean_query = query_clean
                     if search_type == 'username' and query_lower.startswith('@'):
                         clean_query = query_lower[1:]
-                    elif search_type == 'account_id':
-                        if query_lower.startswith('id') and query_clean[2:].isdigit():
-                            clean_query = query_clean[2:] 
-                        else:
-                            clean_query = query_clean
-                    else:
-                        clean_query = query_clean
+                    elif search_type == 'account_id' and query_lower.startswith('id') and query_clean[2:].isdigit():
+                        clean_query = query_clean[2:]
 
-                    clean_query = str(clean_query)  
-
-    
                     if field_name in filterable_attrs:
                         search_result = index.search(clean_query, {
                             'filter': f'{field_name} = "{clean_query}"',
                             'limit': 100
                         })
                         hits = search_result.get('hits', [])
-
                     else:
+                        hits = []
                         search_result = index.search("", {
                             'matchingStrategy': 'all',
                             'limit': 200
                         })
-                        hits = []
                         for hit in search_result.get('hits', []):
                             value = hit.get(field_name)
-                            if value is None:
-                                continue
-                            if str(value) == clean_query:
+                            if value is not None and str(value) == clean_query:
                                 hits.append(hit)
 
                 for hit in hits:
@@ -217,43 +199,19 @@ async def search_database(query: str, search_type: str = None) -> dict:
 
         for res in partial_results:
             if isinstance(res, Exception):
-                logger.error("Error in processing index: {res}")
+                logger.error(f"Error in processing index: {res}")
                 continue
             all_results.extend(res)
-
-        if search_type == 'name':
-            all_results = [
-                r for r in all_results
-                if ' '.join(str(r.get('Name', '')).lower().split()) == query_lower or
-                   ' '.join(str(r.get('Name', '')).lower().split()) == ' '.join(query_words[::-1])
-            ]
-
-
-        if search_type == 'name':
-            all_results.sort(
-                key=lambda x: str(x.get('Name', '')).lower() == query_lower,  
-                reverse=True
-            )
-        else:
-            clean_query = query_clean
-            if search_type == 'username' and query_lower.startswith('@'):
-                clean_query = query_lower[1:]
-            elif search_type == 'account_id':
-                if query_lower.startswith('id') and query_clean[2:].isdigit():
-                    clean_query = query_clean[2:]
-            clean_query = str(clean_query)
-
-            all_results.sort(
-                key=lambda x: any(
-                    (str(v).lower() == query_lower if isinstance(v, str) else str(v) == clean_query)
-                    for v in x.values() if v is not None
-                ),
-                reverse=True
-            )
-
+            
+        all_results.sort(
+            key=lambda x: str(x.get('Name', '')).lower() == query_lower if search_type=='name' else any(
+                (str(v).lower() == query_lower if isinstance(v, str) else str(v) == query_clean)
+                for v in x.values() if v is not None
+            ),
+            reverse=True
+        )
 
         logger.info(f"Search '{query}' ({search_type}) found {len(all_results)} results")
-
         return {
             'success': True,
             'query': query,
@@ -275,8 +233,153 @@ async def search_database(query: str, search_type: str = None) -> dict:
             'data': []
         }
 
+async def deep_search(
+    initial_query: str,
+    search_type: str = None,
+    max_depth: int = 5,
+    max_queries: int = 5,
+    max_per_hit: int = 5,
+    concurrency: int = 5
+) -> dict:
+    """
+    Perform a deep search by recursively searching related fields.
+    """
+    from asyncio import Semaphore, gather
 
-import io
+    def make_uid(hit: dict) -> str:
+        parts = []
+        for k in ("Email", "Phone", "Username"):
+            v = hit.get(k)
+            if v:
+                if k == "Phone":
+                    try:
+                        v = normalize_phone_digits(v)
+                    except Exception:
+                        v = str(v).strip()
+                parts.append(str(v).strip().lower())
+        return "|".join(parts) if parts else str(hit).strip().lower()
+
+    def get_field(hit: dict, *keys):
+        for k in keys:
+            v = hit.get(k)
+            if v not in (None, ""):
+                return v
+        return None
+
+    if not search_type:
+        try:
+            search_type = detect_search_type(initial_query)
+        except Exception:
+            search_type = None
+
+    queue = [(initial_query, search_type, 0)]
+    seen_queries = set()
+    aggregated = {}
+    queries_done = 0
+    sem = Semaphore(concurrency)
+
+    async def run_one_search(q_value: str, q_type: str):
+        nonlocal queries_done
+        if queries_done >= max_queries:
+            return None
+        async with sem:
+            try:
+                if q_type == "phone":
+                    q_value_norm = normalize_phone_digits(q_value)
+                else:
+                    q_value_norm = str(q_value).strip()
+                resp = await search_database(q_value_norm, search_type=q_type)
+            except Exception as e:
+                logger.debug(f"[deep_search] search_database error for {q_value} ({q_type}): {e}")
+                return None
+        queries_done += 1
+        return resp
+
+    idx = 0
+    while idx < len(queue):
+        current_depth = queue[idx][2]
+        if current_depth > max_depth:
+            break
+
+        batch = []
+        while idx < len(queue) and queue[idx][2] == current_depth:
+            batch.append(queue[idx])
+            idx += 1
+
+        tasks = []
+        for q_value, q_type, depth in batch:
+            key_seen = (str(q_value).strip().lower(), q_type or "")
+            if key_seen in seen_queries:
+                continue
+            seen_queries.add(key_seen)
+            tasks.append(run_one_search(q_value, q_type))
+
+        if not tasks:
+            continue
+
+        results = await gather(*tasks, return_exceptions=True)
+
+        for resp in results:
+            if isinstance(resp, Exception) or resp is None:
+                continue
+            if not isinstance(resp, dict) or not resp.get("success"):
+                continue
+            hits = resp.get("data") or []
+            if not isinstance(hits, list):
+                continue
+
+            for hit in hits:
+                uid = make_uid(hit)
+                if uid not in aggregated:
+                    new_hit = dict(hit)
+                    for f in ("Phone", "Email", "Username"):
+                        val = get_field(new_hit, f)
+                        if val:
+                            new_hit[f] = str(val).strip()
+                    aggregated[uid] = new_hit
+                else:
+                    existing = aggregated[uid]
+                    for k in ("Phone", "Email", "Username"):
+                        val = get_field(hit, k)
+                        if val and not existing.get(k):
+                            existing[k] = str(val).strip()
+                    for k, v in hit.items():
+                        if k not in ("Phone", "Email", "Username") and v and not existing.get(k):
+                            existing[k] = v
+
+            if current_depth < max_depth and queries_done < max_queries:
+                new_subs = 0
+                for hit in hits:
+                    for fld in ("Email", "Phone", "Username"):
+                        val = get_field(hit, fld)
+                        if not val:
+                            continue
+                        val_str = str(val).strip()
+                        typ = fld.lower()
+                        seen_key = (val_str.lower(), typ)
+                        if seen_key in seen_queries:
+                            continue
+                        queue.append((val_str, typ, current_depth + 1))
+                        new_subs += 1
+                        if new_subs >= max_per_hit:
+                            break
+                    if new_subs >= max_per_hit:
+                        break
+
+        if queries_done >= max_queries:
+            break
+
+    data_list = list(aggregated.values())
+    return {
+        "success": True,
+        "query": initial_query,
+        "search_type": search_type,
+        "depth": max_depth,
+        "results_found": bool(data_list),
+        "count": len(data_list),
+        "data": data_list
+    }
+
 
 def generate_results_file(results: dict) -> io.BytesIO:
     """

@@ -6,7 +6,7 @@ TODO buttons
 from aiogram import types, Dispatcher
 from aiogram.dispatcher.filters import Text
 from database import db
-from utils.search_stub import get_total_count, search_database, generate_results_file, is_database_online, detect_search_type
+from utils.search_stub import deep_search, get_total_count, search_database, generate_results_file, is_database_online, detect_search_type
 import config
 import logging
 
@@ -95,7 +95,7 @@ async def handle_search_query(message: types.Message):
         await message.answer(
             "⚠️ You've reached your free search limit.\n\n"
             "Please contact the administrator to get more searches.\n\n"
-            "Contact: {config.ADMIN_USERNAME}"
+            f"Contact: {config.ADMIN_USERNAME}"
         )
         return
     
@@ -127,8 +127,10 @@ async def handle_search_query(message: types.Message):
         search_type = detect_search_type(query)
         
         # Perform search (placeholder function)
-        results = await search_database(query, search_type)
-        
+        # results = await search_database(query, search_type)
+        # TESTING DEEP SEARCH FOR ALL USERS 
+        results = await deep_search(query, search_type)
+
         # Decrement user's search count
         db.update_user_searches(user.telegram_id, decrement=True)
         
