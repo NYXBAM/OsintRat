@@ -186,7 +186,7 @@ async def search_database(query: str, search_type: str = None) -> dict:
                         'Date of Birth': hit.get('DOB'),
                         'Country': hit.get('country'),
                         'Extra Info': hit.get('extra'),
-                        'Source': hit.get('source')
+                        # 'Source': hit.get('source')
                     })
 
             except Exception as e:
