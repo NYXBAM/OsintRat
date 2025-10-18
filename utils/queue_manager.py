@@ -91,7 +91,7 @@ class QueueManager:
                     db.mark_query_processed(query.id)
                     
                     # Small delay to avoid flooding
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(1)
                     
                 except Exception as e:
                     logger.error(f"Error processing queued query {query.id}: {e}")
