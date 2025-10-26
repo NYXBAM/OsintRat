@@ -27,7 +27,9 @@ class User(Base):
     is_blocked = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
     last_activity = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
-
+    referrer_id = Column(Integer, nullable=True)
+    referrals_count = Column(Integer, default=0)
+    
     def __repr__(self):
         return f"<User(telegram_id={self.telegram_id}, username={self.username})>"
 

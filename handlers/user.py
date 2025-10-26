@@ -5,7 +5,11 @@ TODO buttons
 
 from aiogram import types, Dispatcher
 from aiogram.dispatcher.filters import Text
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from bot_instance import bot
 from database import db
+from utils.helper import decode_ref_id, encode_ref_id
+from utils.keyboards.inline import referral_button
 from utils.search_stub import deep_search, get_total_count, search_database, generate_results_file, is_database_online, detect_search_type
 import config
 import logging
@@ -16,32 +20,89 @@ async def cmd_start(message: types.Message):
     """
     Handle /start command.
     """
-    user = db.get_or_create_user(
+    bot_info = await bot.get_me()
+    # bot_username = bot_info.username
+    # ref_code = encode_ref_id(message.from_user.id)
+    args = message.get_args()
+    referrer_id = None
+    if args:
+        try:
+            referrer_id = decode_ref_id(args)
+        except Exception as e:
+            logger.warning(f"Failed to decode referral code '{args}': {e}")
+            referrer_id = None
+    user, is_new = db.get_or_create_user(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
         first_name=message.from_user.first_name,
-        last_name=message.from_user.last_name
+        last_name=message.from_user.last_name,
+        referrer_id=referrer_id,
+        return_tuple=True
     )
-    channel_link = f'<a href="https://t.me/{config.CHANNEL_USERNAME}"><b> UPDATE CHANNEL 🗞</b></a>'
+    
+    if is_new:
+        if referrer_id and referrer_id != message.from_user.id:
+            try:
+                new_user_name = (
+                    f"@{message.from_user.username}"
+                    if message.from_user.username
+                    else message.from_user.first_name or str(message.from_user.id)
+                )
+                await bot.send_message(
+                    referrer_id,
+                    f"🎉 <b>You’ve got a new referral</b> — {new_user_name}!\n"
+                    f"👏 You’ve earned + <b>{config.FREE_SEARCH_PER_REF} extra searches.</b>\n\n"
+                    f"Thanks for helping grow us 🚀",
+                    parse_mode='HTML'
+                )
+
+            except Exception as e:
+                logger.warning(f"Error sending message to {referrer_id}: {e}")
+                
+    channel_link = f'<a href="https://t.me/{config.CHANNEL_USERNAME}"><b>UPDATE CHANNEL</b></a>'
+    # welcome_text = (
+    #         f"👋 <b>Welcome to the OsintRat 🐀</b>\n\n"
+    #         f"You can search for people by:\n"
+    #         f"• Last name\n"
+    #         f"• Email address\n"
+    #         f"• Phone number\n"
+    #         f"• @username\n"
+    #         f"• id1234567890\n\n"
+    #         f"Just type your query and I'll search for you.\n"
+    #         f"To search by username, type @username. For user ID, type id12345678.\n\n"
+    #         f"📊 <b>Your remaining free searches:</b> {user.free_searches_remaining}\n\n"
+    #         f"Total records in database: {get_total_count()} lines\n\n"
+    #         f"⚠ <i>Disclaimer:</i> All information in this bot is <b>generated</b>. "
+    #         f"<i>Any resemblance to real persons or data is purely <b>coincidental</b>.</i>\n\n"
+    #         f"<i>This bot takes no responsibility for user-generated content. Any resemblance or</i>\n" 
+    #         f"<i>coincidence is purely accidental. It was built for entertainment purposes only</i>\n" 
+    #         f"<i>All information is either AI-generated or sourced from publicly available data.</i>\n"
+    #         f"Check out our {channel_link}!\n\n\n"
+    #         )
     
     welcome_text = (
-            f"👋 <b>Welcome to the OsintRat 🐀</b>\n\n"
-            f"You can search for people by:\n"
-            f"• Last name\n"
-            f"• Email address\n"
-            f"• Phone number\n"
-            f"• @username\n"
-            f"• id1234567890\n\n"
-            f"Just type your query and I'll search for you.\n"
-            f"To search by username, type @username. For user ID, type id12345678.\n\n"
-            f"📊 <b>Your remaining free searches:</b> {user.free_searches_remaining}\n\n"
-            f"Total records in database: {get_total_count()} lines\n\n"
-            f"⚠ <i>Disclaimer:</i> All information in this bot is <b>generated</b>. "
-            f"Any resemblance to real persons or data is purely <b>coincidental</b>.\n\n"
-            f"HELP: {config.ADMIN_USERNAME}\n\n"
-            f"Check out our {channel_link}!"
-        )
-    await message.answer(welcome_text, parse_mode="HTML", disable_web_page_preview=True)
+            f"&#x1F44B; <b>Welcome to the OsintRatBot 🐀</b>\n\n"
+            f"Your personal tool for quick and easy searches!\n"
+            f"Simply type your query, and let the RAT do the work!\n\n"
+            f"&#x1F50E; <b>Search by the following:</b>\n"
+            f"&#x2022; Last Name\n"
+            f"&#x2022; Email Address\n"
+            f"&#x2022; Phone Number (e.g., <code>+780991234567</code>)\n"
+            f"&#x2022; @ Username (e.g., <b>@ username</b>)\n"
+            f"&#x2022; Telegram ID (e.g., <b>id1234567890</b>)\n\n"
+            f"&#x1F4A1; <i>Remember:</i> To search by username, type <code>@</code> before the name. For a user ID, type <code>id</code> before the number.\n\n"
+            f"----------------------------------\n"
+            f"&#x1F4CA; <b>Your Search Stats</b>\n"
+            f"<b>Remaining Free Searches:</b> <u>{user.free_searches_remaining}</u>\n"
+            f"Total Records in Database: <i>{get_total_count()}</i> lines\n"
+            f"----------------------------------\n\n"
+            f"&#x26A0;&#xFE0F; <b>Important Disclaimer:</b>\n"
+            f"All information in this bot is <b>AI-GENERATED</b> or sourced from publicly available data. "
+            f"Any resemblance to real persons or data is purely <b>COINCIDENTAL</b> and accidental.\n\n"
+            f"This bot was built for <i><b>entertainment purposes only</b></i> and takes no responsibility for user-generated content or coincidences.\n"
+            f"Stay updated! \n\nCheck out our 📣  {channel_link}!\n\n\n"
+            )
+    await message.answer(welcome_text, parse_mode="HTML", disable_web_page_preview=True, reply_markup=referral_button())
     
 async def cmd_help(message: types.Message):
     """Handle /help command."""
@@ -181,7 +242,72 @@ async def handle_search_query(message: types.Message):
             False,
             success=False
         )
+        
+async def show_referrals_callback(callback: types.CallbackQuery):
+    user = db.get_user(callback.from_user.id)
+    bot_info = await bot.get_me()
+    bot_username = bot_info.username
 
+    ref_code = encode_ref_id(callback.from_user.id)
+    referral_link = f"https://t.me/{bot_username}?start={ref_code}"
+
+    text = (
+        f"🎁 <b>Your Referral Info</b>\n\n"
+        f"👤 Referrals invited: <b>{user.referrals_count}</b>\n"
+        f"🔍 Bonus searches earned: <b>{user.referrals_count * config.FREE_SEARCH_PER_REF}</b>\n\n"
+        f"📎 <b>Your referral link:</b>\n{referral_link}\n\n"
+        f"Invite friends and earn more free searches! 🚀"
+    )
+
+    await callback.message.edit_text(
+        text,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+        reply_markup=InlineKeyboardMarkup().add(
+            InlineKeyboardButton("⬅️ Back", callback_data="back_to_main")
+        )
+    )
+
+    await callback.answer() 
+
+async def back_to_main_callback(callback: types.CallbackQuery):
+    user = db.get_user(callback.from_user.id)
+    bot_info = await bot.get_me()
+    bot_username = bot_info.username
+    ref_code = encode_ref_id(callback.from_user.id)
+    channel_link = f'<a href="https://t.me/{config.CHANNEL_USERNAME}"><b> UPDATE CHANNEL</b></a>'
+
+    welcome_text = (
+            f"&#x1F44B; <b>Welcome to the OsintRatBot 🐀</b>\n\n"
+            f"Your personal tool for quick and easy searches!\n"
+            f"Simply type your query, and let the RAT do the work!\n\n"
+            f"&#x1F50E; <b>Search by the following:</b>\n"
+            f"&#x2022; Last Name\n"
+            f"&#x2022; Email Address\n"
+            f"&#x2022; Phone Number (e.g., <code>+780991234567</code>)\n"
+            f"&#x2022; @ Username (e.g., <b>@ username</b>)\n"
+            f"&#x2022; Telegram ID (e.g., <b>id1234567890</b>)\n\n"
+            f"&#x1F4A1; <i>Remember:</i> To search by username, type <code>@</code> before the name. For a user ID, type <code>id</code> before the number.\n\n"
+            f"----------------------------------\n"
+            f"&#x1F4CA; <b>Your Search Stats</b>\n"
+            f"<b>Remaining Free Searches:</b> <u>{user.free_searches_remaining}</u>\n"
+            f"Total Records in Database: <i>{get_total_count()}</i> lines\n"
+            f"----------------------------------\n\n"
+            f"&#x26A0;&#xFE0F; <b>Important Disclaimer:</b>\n"
+            f"All information in this bot is <b>AI-GENERATED</b> or sourced from publicly available data. "
+            f"Any resemblance to real persons or data is purely <b>COINCIDENTAL</b> and accidental.\n\n"
+            f"This bot was built for <i><b>entertainment purposes only</b></i> and takes no responsibility for user-generated content or coincidences.\n"
+            f"Stay updated! \n\nCheck out our 📣 {channel_link}!\n\n\n"
+            )
+
+    await callback.message.edit_text(
+        welcome_text,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+        reply_markup=referral_button()
+    )
+
+    await callback.answer()
 
 def register_user_handlers(dp: Dispatcher):
     """
@@ -191,5 +317,6 @@ def register_user_handlers(dp: Dispatcher):
     dp.register_message_handler(cmd_start, commands=['start'])
     dp.register_message_handler(cmd_help, commands=['help'])
     dp.register_message_handler(cmd_balance, commands=['balance'])
-    
+    dp.register_callback_query_handler(show_referrals_callback, lambda c: c.data == "show_referrals")
+    dp.register_callback_query_handler(back_to_main_callback, lambda c: c.data == "back_to_main")
     dp.register_message_handler(handle_search_query, content_types=['text'])

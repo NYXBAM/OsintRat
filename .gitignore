@@ -5,3 +5,4 @@
 /bot_database.db
 /develop
 /venv
+*.py[cod]

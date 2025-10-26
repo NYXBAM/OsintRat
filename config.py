@@ -26,7 +26,8 @@ DATABASE_URL = "sqlite:///bot_database.db"
 
 # User quota settings
 FREE_SEARCHES_PER_USER = 50
-
+# Search per refferal 
+FREE_SEARCH_PER_REF = 5
 # Queue processing interval (in seconds)
 QUEUE_CHECK_INTERVAL = 60  # Check every 60 seconds
 

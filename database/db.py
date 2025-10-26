@@ -39,11 +39,13 @@ def get_session() -> Session:
 # User management functions
 
 def get_or_create_user(telegram_id: int, username: str = None, 
-                       first_name: str = None, last_name: str = None) -> User:
+                       first_name: str = None, last_name: str = None,
+                       referrer_id: int = None, return_tuple: bool = False) -> User:
     """
     Get an existing user or create a new one.
     New users start with the default number of free searches.
     """
+    is_new = False
     session = get_session()
     try:
         user = session.query(User).filter(User.telegram_id == telegram_id).first()
@@ -55,20 +57,31 @@ def get_or_create_user(telegram_id: int, username: str = None,
             user.last_name = last_name
             user.last_activity = datetime.now(timezone.utc)
         else:
+            is_new = True
             # Create new user with free searches
             logger.info(f"New user: {telegram_id} ({username})")
+            
             user = User(
                 telegram_id=telegram_id,
                 username=username,
                 first_name=first_name,
                 last_name=last_name,
-                free_searches_remaining=config.FREE_SEARCHES_PER_USER
+                free_searches_remaining=config.FREE_SEARCHES_PER_USER,
+                referrer_id=referrer_id if referrer_id != telegram_id else None
             )
             session.add(user)
+            
+            if referrer_id and referrer_id != telegram_id:
+                ref_user = session.query(User).filter(User.telegram_id == referrer_id).first()
+                if ref_user:
+                    ref_user.referrals_count = (ref_user.referrals_count or 0) + 1
+                    ref_user.free_searches_remaining += config.FREE_SEARCH_PER_REF  
+                    logger.info(f"Referral: {ref_user.telegram_id} -> {telegram_id}")
+        
         
         session.commit()
         session.refresh(user)
-        return user
+        return (user, is_new) if return_tuple else user
     finally:
         session.close()
 
