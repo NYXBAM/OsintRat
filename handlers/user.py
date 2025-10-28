@@ -1,15 +1,18 @@
 """
 Simple user command and message handlers 
-TODO buttons 
 """
 
 from aiogram import types, Dispatcher
 from aiogram.dispatcher.filters import Text
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputFile
+from aiogram.utils import markdown as md
 from bot_instance import bot
 from database import db
+from database.models import SearchLog
+import io
+from utils.advanced_search.maigret import run_maigret
 from utils.helper import decode_ref_id, encode_ref_id
-from utils.keyboards.inline import referral_button
+from utils.keyboards.inline import advanced_search_button, referral_button
 from utils.search_stub import deep_search, get_total_count, search_database, generate_results_file, is_database_online, detect_search_type
 import config
 import logging
@@ -60,26 +63,6 @@ async def cmd_start(message: types.Message):
                 logger.warning(f"Error sending message to {referrer_id}: {e}")
                 
     channel_link = f'<a href="https://t.me/{config.CHANNEL_USERNAME}"><b>UPDATE CHANNEL</b></a>'
-    # welcome_text = (
-    #         f"👋 <b>Welcome to the OsintRat 🐀</b>\n\n"
-    #         f"You can search for people by:\n"
-    #         f"• Last name\n"
-    #         f"• Email address\n"
-    #         f"• Phone number\n"
-    #         f"• @username\n"
-    #         f"• id1234567890\n\n"
-    #         f"Just type your query and I'll search for you.\n"
-    #         f"To search by username, type @username. For user ID, type id12345678.\n\n"
-    #         f"📊 <b>Your remaining free searches:</b> {user.free_searches_remaining}\n\n"
-    #         f"Total records in database: {get_total_count()} lines\n\n"
-    #         f"⚠ <i>Disclaimer:</i> All information in this bot is <b>generated</b>. "
-    #         f"<i>Any resemblance to real persons or data is purely <b>coincidental</b>.</i>\n\n"
-    #         f"<i>This bot takes no responsibility for user-generated content. Any resemblance or</i>\n" 
-    #         f"<i>coincidence is purely accidental. It was built for entertainment purposes only</i>\n" 
-    #         f"<i>All information is either AI-generated or sourced from publicly available data.</i>\n"
-    #         f"Check out our {channel_link}!\n\n\n"
-    #         )
-    
     welcome_text = (
             f"&#x1F44B; <b>Welcome to the OsintRatBot 🐀</b>\n\n"
             f"Your personal tool for quick and easy searches!\n"
@@ -191,29 +174,29 @@ async def handle_search_query(message: types.Message):
         # results = await search_database(query, search_type)
         # TESTING DEEP SEARCH FOR ALL USERS 
         results = await deep_search(query, search_type)
-
+        final_query = results.get('query') or query
         # Decrement user's search count
         db.update_user_searches(user.telegram_id, decrement=True)
         
         # Log the search
         db.log_search(
             user.telegram_id,
-            query,
+            final_query,
             search_type,
             results['results_found']
         )
-        
+        reply_markup = advanced_search_button() if search_type == "username" else None
         user = db.get_user(user.telegram_id)  # Refresh user data
         
         if results['results_found']:
             # Generate results file
             results_file = generate_results_file(results)
-            
             await search_msg.edit_text(
                 f"✅ Search complete!\n\n"
-                f"Found {results['count']} result(s) for: {query}\n"
+                f"Found {results['count']} result(s) for: {final_query}\n"
                 f"Search type: {search_type}\n\n"
-                f"📊 Remaining searches: {user.free_searches_remaining}"
+                f"📊 Remaining searches: {user.free_searches_remaining}",
+                reply_markup=reply_markup
             )
             
             # Send results file
@@ -222,11 +205,15 @@ async def handle_search_query(message: types.Message):
                 caption="Here are your search results.\n\n@OsintRatBot"
             )
         else:
+            
             await search_msg.edit_text(
-                f"❌ No results found for: {query}\n\n"
+                f"❌ No results found for: {final_query}\n\n"
                 f"Search type: {search_type}\n"
-                f"📊 Remaining searches: {user.free_searches_remaining}"
+                f"📊 Remaining searches: {user.free_searches_remaining}",
+                reply_markup=reply_markup
             )
+            
+
     
     except Exception as e:
         logging.error(f"Error processing search {e}")
@@ -237,7 +224,7 @@ async def handle_search_query(message: types.Message):
         # Log failed search
         db.log_search(
             user.telegram_id,
-            query,
+            final_query,
             None,
             False,
             success=False
@@ -309,6 +296,95 @@ async def back_to_main_callback(callback: types.CallbackQuery):
 
     await callback.answer()
 
+
+async def advanced_search_callback(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    user = db.get_user(user_id)
+
+    session = db.get_session()
+    try:
+        session.expire_all()
+        for log in session.query(SearchLog).filter(
+            SearchLog.user_telegram_id == user_id,
+            SearchLog.search_type == "username"
+        ).order_by(SearchLog.timestamp.desc()).limit(3).all():
+            print(f"  → {log.timestamp} | {log.query}")
+        last_username_log = (
+            session.query(SearchLog)
+            .filter(
+                SearchLog.user_telegram_id == user_id,
+                SearchLog.search_type == "username"
+            )
+            .order_by(SearchLog.timestamp.desc())
+            .first()
+        )
+    finally:
+        session.close()
+
+    if not last_username_log:
+        await callback_query.answer("No recent username search found.", show_alert=True)
+        return
+
+    query = last_username_log.query 
+
+    await callback_query.answer()
+
+    await callback_query.message.edit_text(
+        f"🔍 Running advanced scan for `{md.hcode(query)}`...\n\nThis may take a few minutes... ⏳",
+        parse_mode="html"
+    )
+
+    try:
+        results = await run_maigret(query)
+        db.update_user_searches(user.telegram_id, decrement=True)
+        results_found = '[+]' in results
+
+        db.log_search(
+            telegram_id=user.telegram_id,
+            query=query,
+            search_type="username_advanced",
+            results_found=results_found
+        )
+
+        user = db.get_user(user.telegram_id)
+
+        if results_found:
+            buffer = io.BytesIO(results.encode('utf-8'))
+            buffer.name = f"OSINT_{query.replace('@', '')}.txt"
+
+            await callback_query.message.edit_text(
+                f"✅ Scan complete!\n\nAdditional profiles found for: `{md.hcode(query)}`\n"
+                f"📊 Searches remaining: {user.free_searches_remaining}",
+                parse_mode="html"
+            )
+
+            await callback_query.message.answer_document(
+                InputFile(buffer),
+                caption=f"✅ Here are your search results.\n\n@OsintRatBot",
+                parse_mode="html"
+            )
+        else:
+            await callback_query.message.edit_text(
+                f"❌ No additional profiles found for `{md.hcode(query)}`.\n\n"
+                f"📊 Searches remaining: {user.free_searches_remaining}",
+                parse_mode="html"
+            )
+
+    except Exception as e:
+        logging.error(f"Advanced search error: {e}", exc_info=True)
+        await callback_query.message.edit_text(
+            "An error occurred during the scan. Please try again."
+        )
+        db.log_search(
+            telegram_id=user.telegram_id,
+            query=query,
+            search_type="username_advanced",
+            results_found=False,
+            success=False
+        )
+        
+
+
 def register_user_handlers(dp: Dispatcher):
     """
     Register all user handlers with the dispatcher.
@@ -319,4 +395,5 @@ def register_user_handlers(dp: Dispatcher):
     dp.register_message_handler(cmd_balance, commands=['balance'])
     dp.register_callback_query_handler(show_referrals_callback, lambda c: c.data == "show_referrals")
     dp.register_callback_query_handler(back_to_main_callback, lambda c: c.data == "back_to_main")
+    dp.register_callback_query_handler(advanced_search_callback, lambda c: c.data == "advanced_search")
     dp.register_message_handler(handle_search_query, content_types=['text'])
