@@ -3,6 +3,7 @@ Database connection and session management.
 """
 
 import asyncio
+from zoneinfo import ZoneInfo
 from aiogram import Bot
 import logging
 from sqlalchemy import create_engine, inspect
@@ -169,10 +170,12 @@ def log_search(telegram_id: int, query: str, search_type: str = None,
             query=query,
             search_type=search_type,
             results_found=results_found,
-            success=success
+            success=success,
+            timestamp=datetime.now(ZoneInfo("UTC"))
         )
         session.add(log_entry)
         session.commit()
+        session.expire_all()
     finally:
         session.close()
 

@@ -4,7 +4,7 @@ Defines the structure of tables for users, search logs, and query queue.
 """
 
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, func
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, timezone
 
@@ -46,7 +46,11 @@ class SearchLog(Base):
     query = Column(Text, nullable=False)
     search_type = Column(String(50), nullable=True)  # e.g., 'name', 'email', 'phone'
     results_found = Column(Boolean, default=False)
-    timestamp = Column(DateTime, default=datetime.now(timezone.utc))
+    timestamp = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),  
+        nullable=False
+    )
     success = Column(Boolean, default=True)
 
     def __repr__(self):
