@@ -247,7 +247,7 @@ async def send_all(bot: Bot, text: str):
 
         for user in users:
             try:
-                await bot.send_message(chat_id=user.telegram_id, text=text, parse_mode='HTML')
+                await bot.send_message(chat_id=user.telegram_id, text=text, parse_mode='HTML',disable_web_page_preview=True)
                 sent_count += 1
             except Exception as e:
                 failed_count += 1
