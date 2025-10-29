@@ -154,12 +154,23 @@ async def handle_search_query(message: types.Message):
         # Add to queue
         db.update_user_searches(user.telegram_id, decrement=True)
         db.add_to_queue(user.telegram_id, query)
+        search_type = detect_search_type(query)
+        db.log_search(
+                        user.telegram_id,
+                        query,
+                        search_type,
+                        results_found=False,
+                    )
+        
+        reply_markup = advanced_search_button() if search_type == "username" else None
         
         await message.answer(
             "⏸️ The database is currently offline.\n\n"
             "Your query has been added to the queue and will be processed "
             "automatically when the database comes back online.\n\n"
-            "You'll receive a notification when your results are ready."
+            "You'll receive a notification when your results are ready.",
+            
+            reply_markup=reply_markup
         )
         return
     
@@ -308,7 +319,7 @@ async def advanced_search_callback(callback_query: types.CallbackQuery):
             SearchLog.user_telegram_id == user_id,
             SearchLog.search_type == "username"
         ).order_by(SearchLog.timestamp.desc()).limit(3).all():
-            print(f"  → {log.timestamp} | {log.query}")
+            logger.info(f"  → {log.timestamp} | {log.query}")
         last_username_log = (
             session.query(SearchLog)
             .filter(
@@ -320,6 +331,8 @@ async def advanced_search_callback(callback_query: types.CallbackQuery):
         )
     finally:
         session.close()
+    
+   
 
     if not last_username_log:
         await callback_query.answer("No recent username search found.", show_alert=True)
