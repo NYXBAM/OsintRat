@@ -93,7 +93,6 @@ def main():
     logger.info("🔄 Starting bot polling...")
     executor.start_polling(
         dp,
-        skip_updates=True,
         on_startup=on_startup,
         on_shutdown=on_shutdown
     )
