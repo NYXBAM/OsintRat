@@ -6,7 +6,7 @@ Processes queued queries when database comes back online.
 import asyncio
 from aiogram import Bot
 from database import db
-from utils.search_stub import search_database, generate_results_file, is_database_online
+from utils.search_stub import deep_search, search_database, generate_results_file, is_database_online
 import config
 import logging
 
@@ -61,7 +61,9 @@ class QueueManager:
                         continue
                     
                     # Perform the search
-                    results = await search_database(query.query)
+                    # results = await search_database(query.query)
+                    # trying deep search
+                    results = await deep_search(query.query)
                     
                     # Log the search
                     db.log_search(
