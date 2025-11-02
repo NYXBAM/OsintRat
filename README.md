@@ -10,7 +10,7 @@ Originally created as a portfolio experiment in Big Data indexing and search opt
 All records used by this project are synthetically generated. Any resemblance to real persons, living or dead, is purely coincidental. The dataset and bot responses contain no intentionally real personal data.
 
 
-### 👉 [Try the bot on Telegram](https://t.me/OsintRatBot)
+### 👉 [Try bot on Telegram](https://t.me/OsintRatBot)
 
 ---
 
