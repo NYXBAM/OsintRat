@@ -39,6 +39,7 @@ User → Telegram Bot → Meilisearch API → JSON dataset (~100M records)
 
 - **Python** 3.10+
 - Running instance of **Meilisearch** (configured separately)
+  
 
 ---
 
