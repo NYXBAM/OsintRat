@@ -75,7 +75,7 @@ python main.py
 
 
 # ⚠️ Notes
-
+ 
 The actual dataset (~200 GB) is not included.
 Use your own JSON data and index it separately in Meilisearch.
 
